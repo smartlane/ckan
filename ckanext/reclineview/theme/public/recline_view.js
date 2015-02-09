@@ -13,7 +13,9 @@ this.ckan.module('recline_view', function (jQuery, _) {
 
     initialize: function () {
       jQuery.proxyAll(this, /_on/);
-      this.options.resource = JSON.parse(this.options.resource);
+      resourceText = this.options.resource;
+      this.options.resource = JSON.parse(resourceText);
+      this.options.viewsResource = JSON.parse(resourceText);
       this.options.resourceView = JSON.parse(this.options.resourceView);
       this.el.ready(this._onReady);
       // hack to make leaflet use a particular location to look for images
@@ -22,12 +24,13 @@ this.ckan.module('recline_view', function (jQuery, _) {
 
     _onReady: function() {
       var resourceData = this.options.resource,
+          resourceViews = this.options.viewsResource,
           resourceView = this.options.resourceView;
 
-      this.loadView(resourceData, resourceView);
+      this.loadView(resourceData, resourceView, resourceViews);
     },
 
-    loadView: function (resourceData, reclineView) {
+    loadView: function (resourceData, reclineView, resourceViews) {
       var self = this;
 
       function showError(msg){
@@ -55,9 +58,12 @@ this.ckan.module('recline_view', function (jQuery, _) {
       } else {
           resourceData.backend =  'ckan';
           resourceData.endpoint = jQuery('body').data('site-root') + 'api';
+          resourceViews.backend = 'ckanviews';
+          resourceViews.endpoint = resourceData.endpoint;
       }
 
       dataset = new recline.Model.Dataset(resourceData);
+      views = new recline.Model.Dataset(resourceViews);
 
       var query = new recline.Model.Query();
       query.set({ size: reclineView.limit || 100 });
@@ -73,10 +79,15 @@ this.ckan.module('recline_view', function (jQuery, _) {
 
       dataset.queryState.set(query.toJSON(), {silent: true});
 
+      //Empty query, we just want the full list
+      views.queryState.set(new recline.Model.Query().toJSON(), {silent: false});
       errorMsg = this.options.i18n.errorLoadingPreview + ': ' + this.options.i18n.errorDataStore;
       dataset.fetch()
         .done(function(dataset){
-            self.initializeView(dataset, reclineView);
+            views.fetch()
+              .done(function(view){
+              self.initializeView(dataset, view, reclineView);
+            });
         })
         .fail(function(error){
           if (error.message) errorMsg += ' (' + error.message + ')';
@@ -84,7 +95,7 @@ this.ckan.module('recline_view', function (jQuery, _) {
         });
     },
 
-    initializeView: function (dataset, reclineView) {
+    initializeView: function (dataset, ckanviews, reclineView) {
       var view,
           state,
           controls = [];
@@ -114,7 +125,7 @@ this.ckan.module('recline_view', function (jQuery, _) {
 
         view = new recline.View.Map({model: dataset, state: state});
       } else if(reclineView.view_type === "recline_view") {
-        view = this._newDataExplorer(dataset);
+        view = this._newDataExplorer(dataset, ckanviews);
       } else {
         // default to Grid
         view = new recline.View.SlickGrid({model: dataset});
@@ -141,7 +152,7 @@ this.ckan.module('recline_view', function (jQuery, _) {
       }
     },
 
-    _newDataExplorer: function (dataset) {
+    _newDataExplorer: function (dataset, ckanviews) {
       var views = [
         {
           id: 'grid',
@@ -172,6 +183,13 @@ this.ckan.module('recline_view', function (jQuery, _) {
           label: 'Filters',
           view: new recline.View.ValueFilter({
             model: dataset
+          })
+        },
+        {
+          id: 'ckanView',
+          label: 'Created Views',
+          view: new recline.View.CkanView({
+            model: ckanviews
           })
         }
       ];

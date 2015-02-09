@@ -4413,3 +4413,101 @@ my.ValueFilter = Backbone.View.extend({
 });
 
 })(jQuery, recline.View);
+
+(function($, my) {
+  "use strict";
+
+my.CkanView = Backbone.View.extend({
+  className: 'recline-ckan-views-editor well', 
+  template: ' \
+    <div class="ckan-views"> \
+      <h3>Created Views</h3> \
+      <form class="form-stacked js-add" style="display: none;"> \
+        <button type="submit" class="btn">Add Current View</button> \
+      </form> \
+      <form class="form-stacked js-edit"> \
+        {{#records}} \
+          {{{viewRender}}} \
+        {{/records}} \
+        {{#records.length}} \
+        <button type="submit" class="btn update-filter">Update</button> \
+        {{/records.length}} \
+      </form> \
+    </div> \
+  ',
+  ckanViewTemplates: {
+    term: ' \
+      <div class="ckan-view-{{type}} ckan-view"> \
+        <fieldset> \
+          <a class="js-edit" href="#" title="Show this view" data-ckan-view-id="{{id}}" data-ckan-view-graphtype="{{graph_type}}" data-ckan-view-group="{{group}} data-ckan-view-series="{{series}}">{{title}}</a> \ \
+          <a class="js-remove-ckan-view" href="#" title="Remove this view" data-ckan-view-id="{{id}}">&times;</a> \
+          <input type="text" value="{{term}}" name="term" data-ckan-view-field="{{field}}" data-ckan-view-id="{{id}}" data-ckan-view-type="{{type}}" /> \
+        </fieldset> \
+      </div> \
+    '
+  },
+  events: {
+    'click .js-remove-ckan-view': 'onRemoveCkanView',
+    'click .js-add-ckan-view': 'onAddCkanViewShow',
+    'click .js-edit': 'onTermCkanViewsUpdate',
+    'submit form.js-add': 'onAddCkanView'
+  },
+  initialize: function() {
+    _.bindAll(this, 'render');
+    this.listenTo(this.model.records, 'all', this.render);
+    this.listenTo(this.model.queryState, 'change change:views:new-blank', this.render);
+    this.render();
+  },
+  render: function() {
+    var self = this;
+    var tmplData = $.extend(true, {}, this.model.queryState.toJSON());
+    tmplData.records = this.model.records.toJSON();
+    tmplData.viewRender = function() {
+      return Mustache.render(self.ckanViewTemplates.term, this);
+    };
+    var out = Mustache.render(this.template, tmplData);
+    //TODO check html for garbage:
+    //console.log(out);
+    this.$el.html(out);
+  },
+  updateCkanView: function(input) {
+    var self = this;
+    var filters = self.model.queryState.get('records');
+    var $input = $(input);
+    var filterIndex = parseInt($input.attr('data-filter-id'), 10);
+    var value = $input.val();
+    filters[filterIndex].term = value;
+  },
+  onAddCkanViewShow: function(e) {
+    e.preventDefault();
+    var $target = $(e.target);
+    $target.hide();
+    this.$el.find('form.js-add').show();
+  },
+  onAddCkanView: function(e) {
+    e.preventDefault();
+    var $target = $(e.target);
+    $target.hide();
+    var field = $target.find('select.fields').val();
+    this.model.queryState.addFilter({type: 'term', field: field});
+  },
+  onRemoveCkanView: function(e) {
+    e.preventDefault();
+    var $target = $(e.target);
+    var filterId = $target.attr('data-filter-id');
+    this.model.queryState.removeFilter(filterId);
+  },
+  onTermCkanViewsUpdate: function(e) {
+    var self = this;
+    e.preventDefault();
+    var records = self.model.queryState.get('records');
+    var $target = $(e.target);
+    var graphType = $target.attr('data-ckan-view-graphtype');
+    //TODO: get the rest of the details, set the controls
+    //TODO: what is with multiple series?
+    console.log(graphType);
+    self.model.queryState.trigger('change');
+  }
+});
+
+})(jQuery, recline.View);

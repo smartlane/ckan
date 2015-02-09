@@ -56,6 +56,26 @@ if (isNodeModule) {
       cb(null, out);
     });
   };
+  
+  // For use by Recline backend below
+  // Get resource graph views for the resource
+  my.Client.prototype.viewsQuery = function(queryObj, cb) {
+    var actualQuery = my._normalizeQuery(queryObj);
+    this.action('resource_view_list', actualQuery, function(err, results) {
+      // map ckan types to our usual types ...
+      var fields = ['id', 'package_id', 'resource_id', 'title'];
+      records = [];
+      _.each(results.result, function(record) {
+        if (record.view_type === 'recline_graph_view') records.push(record);
+      });
+      var out = {
+        total: records.length,
+        fields: fields,
+        hits: records
+      };
+      cb(null, out);
+    });
+  };
 
   my.ckan2JsonTableSchemaTypes = {
     'text': 'string',
@@ -143,6 +163,7 @@ if (isNodeModule) {
   // only put in the module namespace so we can access for tests!
   my._normalizeQuery = function(queryObj) {
     var actualQuery = {
+      id: queryObj.id,
       resource_id: queryObj.resource_id,
       q: queryObj.q,
       filters: {},
@@ -207,6 +228,7 @@ if (isNodeModule) {
 var recline = recline || {};
 recline.Backend = recline.Backend || {};
 recline.Backend.Ckan = recline.Backend.Ckan || {};
+recline.Backend.CkanViews = recline.Backend.CkanViews || {};
 (function(my) {
   my.__type__ = 'ckan';
 
@@ -252,4 +274,53 @@ recline.Backend.Ckan = recline.Backend.Ckan || {};
     return dfd.promise();
   };
 }(recline.Backend.Ckan));
+
+(function(my) {
+  my.__type__ = 'ckanviews';
+
+  // private - use either jQuery or Underscore Deferred depending on what is available
+  var Deferred = _.isUndefined(this.jQuery) ? _.Deferred : jQuery.Deferred;
+
+  // ### fetch
+  my.fetch = function(dataset) {
+    var dfd = new Deferred()
+    my.query({}, dataset)
+      .done(function(data) {
+        dfd.resolve({
+          fields: data.fields,
+          records: data.hits
+        });
+      })
+      .fail(function(err) {
+        dfd.reject(err);
+      })
+      ;
+    return dfd.promise();
+  };
+
+  my.query = function(queryObj, dataset) {
+    var dfd = new Deferred()
+      , wrapper
+      ;
+    if (dataset.endpoint) {
+      wrapper = new CKAN.Client(dataset.endpoint);
+    } else {
+      var out = CKAN._parseCkanResourceUrl(dataset.url);
+      dataset.id = out.resource_id;
+      wrapper = new CKAN.Client(out.endpoint);
+    }
+    //use id for resource_view_list call
+    queryObj.id = dataset.id;
+    wrapper.viewsQuery(queryObj, function(err, out) {
+      if (err) {
+        dfd.reject(err);
+      } else {
+        dfd.resolve(out);
+      }
+    });
+    return dfd.promise();
+  };
+}(recline.Backend.CkanViews));
+
+
 
