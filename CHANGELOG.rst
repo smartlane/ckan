@@ -13,6 +13,10 @@ v2.3
 API changes and deprecations
 ----------------------------
 
+* The PDF Viewer extension has been moved to a separate extension:
+  https://github.com/ckan/ckanext-pdfview. Please install it separately if
+  you are using the ``pdf_view`` plugin (or the old ``pdf_preview`` one).
+
 * The ``user_show`` API call does not return the ``datasets``,
   ``num_followers`` or ``activity`` keys by default any more.
 
@@ -23,6 +27,12 @@ API changes and deprecations
   ``activity`` has been removed completely as it was actually a list of
   revisions, rather than the activity stream. If you want the actual activity
   stream for a user, call ``user_activity_list`` instead.
+
+* The ``package_show`` API call does not return the ``tracking_summary``,
+  keys in the dataset or resources by default any more.
+
+  Any custom templates or users of this API call that use these values will
+  need to pass: ``include_tracking=True``.
 
 * ``helpers.get_action()`` (or ``h.get_action()`` in templates) is deprecated.
 
