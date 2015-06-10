@@ -1079,9 +1079,14 @@ my.Flot = Backbone.View.extend({
 
     _.bindAll(this, 'render', 'redraw', '_toolTip', '_xaxisLabel');
     this.needToRedraw = false;
-    this.listenTo(this.model, 'change', this.render);
-    this.listenTo(this.model.fields, 'reset add', this.render);
-    this.listenTo(this.model.records, 'reset add', this.redraw);
+    /* For CKAN purposes, we assume that the model in general will not be being changed externally except at startup */
+    this.listenToOnce(this.model, 'change', this.render);
+    this.listenToOnce(this.model.fields, 'reset add', this.render);
+    this.listenToOnce(this.model.records, 'reset add', this.redraw);
+    /* But when the data (records) change, we want to redraw the graph, but not the whole 'view' */
+    this.listenTo(this.model.records, 'reset add', this.refresh);
+    /* NOTE: This is a serious hack in that recline generally needs this for the dataexplorer where data CAN be edited
+       including new columns etc. in the grid view, and the graph should be updated accordingly */
     var stateData = _.extend({
         group: null,
         // so that at least one series chooser box shows up
@@ -1128,13 +1133,19 @@ my.Flot = Backbone.View.extend({
       this.needToRedraw = true;
       return;
     }
-
     // check we have something to plot
     if (this.state.get('group') && this.state.get('series')) {
       var series = this.createSeries();
       var options = this.getGraphOptions(this.state.attributes.graphType, series[0].data.length);
       this.plot = $.plot(this.$graph, series, options);
     }
+  },
+  
+  /* Use Flot functionality directly to redraw only the graph */
+  refresh: function() {
+    this.plot.setData(this.createSeries());
+    this.plot.setupGrid();
+    this.plot.draw();
   },
 
   show: function() {

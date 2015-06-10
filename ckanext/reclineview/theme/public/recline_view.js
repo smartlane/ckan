@@ -62,6 +62,7 @@ this.ckan.module('recline_view', function (jQuery, _) {
       var query = new recline.Model.Query();
       query.set({ size: reclineView.limit || 100 });
       query.set({ from: reclineView.offset || 0 });
+      query.set({ sort: reclineView.sort || false });
       if (window.parent.ckan.views && window.parent.ckan.views.filters) {
         var defaultFilters = reclineView.filters || {},
             urlFilters = window.parent.ckan.views.filters.get(),
@@ -82,11 +83,24 @@ this.ckan.module('recline_view', function (jQuery, _) {
       dataset.fetch()
         .done(function(dataset){
             self.initializeView(dataset, reclineView);
+            /* For graphs, we support data refreshes */
+            if (reclineView.view_type === "recline_graph_view" && reclineView.realtime && reclineView.refreshInterval) setTimeout(self.refreshData(dataset, reclineView), reclineView.refreshInterval);
         })
         .fail(function(error){
           if (error.message) errorMsg += ' (' + error.message + ')';
           showError(errorMsg);
         });
+    },
+
+    /* Periodically refresh the dataset. This triggers redrawing in recline. */
+    refreshData: function (dataset, reclineView) {
+        function update() {
+          dataset.fetch()
+            .done(function(dataset){
+              setTimeout(update, reclineView.refreshInterval);
+            });
+         }
+         update();
     },
 
     initializeView: function (dataset, reclineView) {
@@ -143,7 +157,7 @@ this.ckan.module('recline_view', function (jQuery, _) {
 
       if(reclineView.view_type === "recline_graph_view") {
         view.redraw();
-      }
+      } 
     },
 
     _newDataExplorer: function (dataset) {
