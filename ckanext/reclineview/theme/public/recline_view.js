@@ -112,7 +112,9 @@ this.ckan.module('recline_view', function (jQuery, _) {
         state = {
           "graphType": reclineView.graph_type,
           "group": reclineView.group,
-          "series": [reclineView.series]
+          "series": [reclineView.series],
+          "ymin": reclineView.ymin || null,
+          "ymax": reclineView.ymax || null
         };
         view = new recline.View.Graph({model: dataset, state: state});
       } else if(reclineView.view_type === "recline_map_view") {

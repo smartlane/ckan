@@ -1138,6 +1138,10 @@ my.Flot = Backbone.View.extend({
       var series = this.createSeries();
       var options = this.getGraphOptions(this.state.attributes.graphType, series[0].data.length);
       this.plot = $.plot(this.$graph, series, options);
+      this.plot.getYAxes()[0].datamax=this.state.get('ymax') || this.plot.getYAxes()[0].datamax;  
+      this.plot.getYAxes()[0].datamin=this.state.get('ymin') || this.plot.getYAxes()[0].datamin;
+      this.plot.setupGrid();
+      this.plot.draw();
     }
   },
   
