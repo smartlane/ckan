@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+# encoding: utf-8
+
 '''Script for checking for common translation mistakes in po files, see:
 
     paster check-po-files --help
@@ -66,7 +68,8 @@ class CheckPoFiles(paste.script.command.Command):
             if errors:
                 for msgid, msgstr in errors:
                     print 'Format specifiers don\'t match:'
-                    print u'    {0} -> {1}'.format(msgid, msgstr)
+                    print u'    {0} -> {1}'.format(
+                        msgid, msgstr.encode('ascii', 'replace'))
 
 
 def check_po_file(path):

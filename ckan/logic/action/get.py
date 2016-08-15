@@ -1,3 +1,5 @@
+# encoding: utf-8
+
 '''API functions for searching for and getting data from CKAN.'''
 
 import uuid
@@ -6,7 +8,7 @@ import json
 import datetime
 import socket
 
-from pylons import config
+from ckan.common import config
 import sqlalchemy
 from paste.deploy.converters import asbool
 
@@ -24,7 +26,6 @@ import ckan.lib.plugins as lib_plugins
 import ckan.lib.activity_streams as activity_streams
 import ckan.lib.datapreview as datapreview
 import ckan.authz as authz
-import ckan.lib.lazyjson as lazyjson
 
 from ckan.common import _
 
@@ -264,92 +265,6 @@ def package_revision_list(context, data_dict):
     return revision_dicts
 
 
-def related_show(context, data_dict=None):
-    '''Return a single related item.
-
-    :param id: the id of the related item to show
-    :type id: string
-
-    :rtype: dictionary
-
-    '''
-    model = context['model']
-    id = _get_or_bust(data_dict, 'id')
-
-    related = model.Related.get(id)
-    context['related'] = related
-
-    if related is None:
-        raise NotFound
-
-    _check_access('related_show', context, data_dict)
-    schema = context.get('schema') \
-        or ckan.logic.schema.default_related_schema()
-    related_dict = model_dictize.related_dictize(related, context)
-    related_dict, errors = _validate(related_dict, schema, context=context)
-
-    return related_dict
-
-
-def related_list(context, data_dict=None):
-    '''Return a dataset's related items.
-
-    :param id: id or name of the dataset (optional)
-    :type id: string
-    :param dataset: dataset dictionary of the dataset (optional)
-    :type dataset: dictionary
-    :param type_filter: the type of related item to show (optional,
-      default: None, show all items)
-    :type type_filter: string
-    :param sort: the order to sort the related items in, possible values are
-      'view_count_asc', 'view_count_desc', 'created_asc' or 'created_desc'
-      (optional)
-    :type sort: string
-    :param featured: whether or not to restrict the results to only featured
-      related items (optional, default: False)
-    :type featured: bool
-
-    :rtype: list of dictionaries
-
-    '''
-    model = context['model']
-    dataset = data_dict.get('dataset', None)
-    if not dataset:
-        dataset = model.Package.get(data_dict.get('id'))
-    _check_access('related_show', context, data_dict)
-    related_list = []
-    if not dataset:
-        related_list = model.Session.query(model.Related)
-
-        filter_on_type = data_dict.get('type_filter', None)
-        if filter_on_type:
-            related_list = related_list.filter(
-                model.Related.type == filter_on_type)
-
-        sort = data_dict.get('sort', None)
-        if sort:
-            sortables = {
-                'view_count_asc': model.Related.view_count.asc,
-                'view_count_desc': model.Related.view_count.desc,
-                'created_asc': model.Related.created.asc,
-                'created_desc': model.Related.created.desc,
-            }
-            s = sortables.get(sort, None)
-            if s:
-                related_list = related_list.order_by(s())
-
-        if data_dict.get('featured', False):
-            related_list = related_list.filter(model.Related.featured == 1)
-        related_items = related_list.all()
-        context['sorted'] = True
-    else:
-        relateds = model.Related.get_for_dataset(dataset, status='active')
-        related_items = (r.related for r in relateds)
-    related_list = model_dictize.related_list_dictize(
-        related_items, context)
-    return related_list
-
-
 def member_list(context, data_dict=None):
     '''Return the members of a group.
 
@@ -470,8 +385,8 @@ def _group_or_org_list(context, data_dict, is_org=False):
         ))
 
     query = query.filter(model.Group.is_organization == is_org)
-    if not is_org:
-        query = query.filter(model.Group.type == group_type)
+    query = query.filter(model.Group.type == group_type)
+
     if sort_info:
         sort_field = sort_info[0][0]
         sort_direction = sort_info[0][1]
@@ -607,7 +522,7 @@ def organization_list(context, data_dict):
     '''
     _check_access('organization_list', context, data_dict)
     data_dict['groups'] = data_dict.pop('organizations', [])
-    data_dict['type'] = 'organization'
+    data_dict.setdefault('type', 'organization')
     return _group_or_org_list(context, data_dict, is_org=True)
 
 
@@ -1046,10 +961,7 @@ def package_show(context, data_dict):
             use_validated_cache = 'schema' not in context
             if use_validated_cache and 'validated_data_dict' in search_result:
                 package_json = search_result['validated_data_dict']
-                if context.get('return_type') == 'LazyJSONObject':
-                    package_dict = lazyjson.LazyJSONObject(package_json)
-                else:
-                    package_dict = json.loads(package_json)
+                package_dict = json.loads(package_json)
                 package_dict_validated = True
             else:
                 package_dict = json.loads(search_result['data_dict'])
@@ -1147,7 +1059,7 @@ def resource_show(context, data_dict):
         if resource_dict['id'] == id:
             break
     else:
-        log.error('Could not find resource ' + id)
+        log.error('Could not find resource %s after all', id)
         raise NotFound(_('Resource was not found.'))
 
     return resource_dict
@@ -1803,6 +1715,10 @@ def package_search(context, data_dict):
         sysadmin will be returned all draft datasets. Optional, the default is
         ``False``.
     :type include_drafts: boolean
+    :param use_default_schema: use default package schema instead of
+        a custom schema defined with an IDatasetForm plugin (default: False)
+    :type use_default_schema: bool
+
 
     The following advanced Solr parameters are supported as well. Note that
     some of these are only available on particular Solr versions. See Solr's
@@ -1842,9 +1758,6 @@ def package_search(context, data_dict):
         "count", "display_name" and "name" entries.  The display_name is a
         form of the name that can be used in titles.
     :type search_facets: nested dict of dicts.
-    :param use_default_schema: use default package schema instead of
-        a custom schema defined with an IDatasetForm plugin (default: False)
-    :type use_default_schema: bool
 
     An example result: ::
 
@@ -1906,7 +1819,11 @@ def package_search(context, data_dict):
 
     results = []
     if not abort:
-        data_source = 'data_dict' if data_dict.get('use_default_schema') else 'validated_data_dict'
+        if asbool(data_dict.get('use_default_schema')):
+            data_source = 'data_dict'
+        else:
+            data_source = 'validated_data_dict'
+        data_dict.pop('use_default_schema', None)
         # return a list of package ids
         data_dict['fl'] = 'id {0}'.format(data_source)
 
@@ -1915,8 +1832,7 @@ def package_search(context, data_dict):
         # instead set it to only retrieve public datasets
         fq = data_dict.get('fq', '')
         if not context.get('ignore_capacity_check', False):
-            fq = ' '.join(p for p in fq.split(' ')
-                          if 'capacity:' not in p)
+            fq = ' '.join(p for p in fq.split() if 'capacity:' not in p)
             data_dict['fq'] = fq + ' capacity:"public"'
 
         # Solr doesn't need 'include_drafts`, so pop it.
@@ -1946,7 +1862,7 @@ def package_search(context, data_dict):
 
         for package in query.results:
             # get the package object
-            package, package_dict = package['id'], package.get(data_source)
+            package_dict = package.get(data_source)
             ## use data in search index if there
             if package_dict:
                 # the package_dict still needs translating when being viewed
@@ -1980,9 +1896,10 @@ def package_search(context, data_dict):
     for field_name in ('groups', 'organization'):
         group_names.extend(facets.get(field_name, {}).keys())
 
-    groups = session.query(model.Group.name, model.Group.title) \
-                    .filter(model.Group.name.in_(group_names)) \
+    groups = (session.query(model.Group.name, model.Group.title)
+                    .filter(model.Group.name.in_(group_names))
                     .all()
+              if group_names else [])
     group_titles_by_name = dict(groups)
 
     # Transform facets into a more useful data structure.
@@ -3343,7 +3260,8 @@ def _group_or_org_followee_list(context, data_dict, is_org=False):
 
 @logic.validate(logic.schema.default_pagination_schema)
 def dashboard_activity_list(context, data_dict):
-    '''Return the authorized user's dashboard activity stream.
+    '''Return the authorized (via login or API key) user's dashboard activity
+       stream.
 
     Unlike the activity dictionaries returned by other ``*_activity_list``
     actions, these activity dictionaries have an extra boolean value with key
@@ -3397,13 +3315,12 @@ def dashboard_activity_list(context, data_dict):
 
 @logic.validate(ckan.logic.schema.default_pagination_schema)
 def dashboard_activity_list_html(context, data_dict):
-    '''Return the authorized user's dashboard activity stream as HTML.
+    '''Return the authorized (via login or API key) user's dashboard activity
+       stream as HTML.
 
     The activity stream is rendered as a snippet of HTML meant to be included
     in an HTML page, i.e. it doesn't have any HTML header or footer.
 
-    :param id: the id or name of the user
-    :type id: string
     :param offset: where to start getting activity items from
         (optional, default: 0)
     :type offset: int
@@ -3527,8 +3444,8 @@ def config_option_show(context, data_dict):
     :py:func:`~ckan.logic.action.get.config_option_list`), which can be updated with the
     :py:func:`~ckan.logic.action.update.config_option_update` action.
 
-    :param id: The configuration option key
-    :type id: string
+    :param key: The configuration option key
+    :type key: string
 
     :returns: The value of the config option from either the system_info table
         or ini file.
