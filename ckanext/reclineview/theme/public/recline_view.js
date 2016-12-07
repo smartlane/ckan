@@ -63,16 +63,21 @@ this.ckan.module('recline_view', function (jQuery, _) {
       query.set({ size: reclineView.limit || 100 });
       query.set({ from: reclineView.offset || 0 });
       query.set({ sort: reclineView.sort || false });
+      var windowThere = false;
       try {
         if (window.parent.ckan.views && window.parent.ckan.views.filters) {
-          var defaultFilters = reclineView.filters || {},
-              urlFilters = window.parent.ckan.views.filters.get(),
-              filters = $.extend({}, defaultFilters, urlFilters);
-          $.each(filters, function (field,values) {
-            query.addFilter({type: 'term', field: field, term: values});
-          });
+          windowThere = true;
         }
       } catch(e) {}
+      var urlFilters = {};
+      if (windowThere) {
+        urlFilters = window.parent.ckan.views.filters.get();
+      }
+      var defaultFilters = reclineView.filters || {},
+          filters = $.extend({}, defaultFilters, urlFilters);
+      $.each(filters, function (field,values) {
+        query.addFilter({type: 'term', field: field, term: values});
+      });
 
       dataset.queryState.set(query.toJSON(), {silent: true});
 
@@ -111,12 +116,17 @@ this.ckan.module('recline_view', function (jQuery, _) {
           controls = [];
 
       if(reclineView.view_type === "recline_graph_view") {
+        var xmin = null;
+        if (reclineView.resource_id == "d977c631-353f-426c-9499-773f3765f7ed") {
+          xmin = reclineView.filter_values[0];
+        }
         state = {
           "graphType": reclineView.graph_type,
           "group": reclineView.group,
           "series": [reclineView.series],
           "ymin": reclineView.ymin || null,
-          "ymax": reclineView.ymax || null
+          "ymax": reclineView.ymax || null,
+          "xmin": xmin
         };
         view = new recline.View.Graph({model: dataset, state: state});
       } else if(reclineView.view_type === "recline_map_view") {

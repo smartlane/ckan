@@ -143,6 +143,8 @@ class ReclineGraphView(ReclineViewBase):
         schema = {
             'offset': [ignore_empty, natural_number_validator],
             'limit': [ignore_empty, natural_number_validator],
+            'ymax': [ignore_empty, natural_number_validator],
+            'ymin': [ignore_empty, natural_number_validator],
             'graph_type': [ignore_empty, in_list(self.list_graph_types)],
             'group': [ignore_empty, in_list(self.list_datastore_fields)],
             'series': [ignore_empty, in_list(self.list_datastore_fields)]

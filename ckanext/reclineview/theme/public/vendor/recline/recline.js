@@ -1140,6 +1140,17 @@ my.Flot = Backbone.View.extend({
       this.plot = $.plot(this.$graph, series, options);
       this.plot.getYAxes()[0].datamax=this.state.get('ymax') || this.plot.getYAxes()[0].datamax;  
       this.plot.getYAxes()[0].datamin=this.state.get('ymin') || this.plot.getYAxes()[0].datamin;
+      if (this.state.get('xmin') != null) { 
+      var timestamp = (new Date(this.state.get('xmin')).getTime());
+      var add = 120;
+      if (timestamp < 1427590800000) {
+          var add = 60;
+      }
+      //timestamp += (add*60*1000); 
+      var timestamp2 = timestamp + (60*24*60*1000);
+      this.plot.getXAxes()[0].datamin=timestamp;
+      this.plot.getXAxes()[0].datamax=timestamp2;
+      }
       this.plot.setupGrid();
       this.plot.draw();
     }
